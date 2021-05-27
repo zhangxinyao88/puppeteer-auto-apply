@@ -3,44 +3,22 @@ const ObjectsToCsv = require('objects-to-csv')
 const fs = require('fs');
 
 // function writeToFile(arr, filename) {
-//   fs.writeFile(filename, JSON.stringify(arr) + "\r\n", function(err) {
-//     if(err) {
-//           console.log(err);
-//     } 
-//     else {
-//       console.log("Output saved to ", filename);
-//     }
-//   }); 
+//   var ws = fs.createWriteStream(filename);
+//   ws.on('error', function(err) { 
+//     /* error handling */ 
+//     console.err("writing err: ", err);
+//   });
+//   arr.forEach(v =>  ws.write(`${JSON.stringify(v)}\r\n`));
+//   console.log("Output saved to ", filename);
+//   ws.end();
 // }
-
-// function writeToFile(arr, filename) {
-//   fs.writeFile(filename, JSON.stringify(arr) + "\r\n", function(err) {
-//     if(err) {
-//           console.log(err);
-//     } 
-//     else {
-//       console.log("Output saved to ", filename);
-//     }
-//   }); 
-// }
-
-function writeToFile(arr, filename) {
-  var ws = fs.createWriteStream(filename);
-  ws.on('error', function(err) { 
-    /* error handling */ 
-    console.err("writing err: ", err);
-  });
-  arr.forEach(v =>  ws.write(`${JSON.stringify(v)}\r\n`));
-  console.log("Output saved to ", filename);
-  ws.end();
-}
 
 
 /* Getting jobs arr - containing textInfo and URL
-1. query all job board - title, location, company, url - done
-follow up: Can't find companyName every time - done
-2. query all apply with indeed - done
-
+1. query all job board - title, location, company, url 
+2. query all apply with indeed
+3. apply all the jobs in the query
+4. put success and failure instances into separate csv file in local directory
 */ 
 async function getPropertyValue(element, propertyName) {
   const property = await element.getProperty(propertyName);
@@ -170,7 +148,7 @@ async function applyJobs(page) {
       console.log('listening dialogs');
       await dialog.accept();
     });    
-    console.log("Applying job - ", jobs[i].titleText, "from company - ", jobs[i].companyNameText, "at ", jobs[i].locationText);
+    console.log("Applying job number ", i, " - ", jobs[i].titleText, "from company - ", jobs[i].companyNameText, "at ", jobs[i].locationText);
     await page.goto(jobs[i].title_link);
     if (await applyJobs(page)) {
       console.log("apply succeeded, moving to success bucket");
@@ -178,14 +156,13 @@ async function applyJobs(page) {
     }
     else {
       console.log("apply failed, moving to error bucket");
+      //page = await browser.newPage();
       jobs_fail.push(jobs[i]);
     }
   }
 
   console.log("successfully applied number: ", jobs_success.length, "\n failed number: ", jobs_fail.length);
   
-  // writeToFile(jobs_success, "success.txt");
-  // writeToFile(jobs_fail, "fail.txt");
   const csv_success = new ObjectsToCsv(jobs_success)
   const csv_fail = new ObjectsToCsv(jobs_fail)
 
