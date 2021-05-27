@@ -1,7 +1,7 @@
 const puppeteer = require('puppeteer');
 const ObjectsToCsv = require('objects-to-csv')
-const fs = require('fs');
 
+// const fs = require('fs');
 // function writeToFile(arr, filename) {
 //   var ws = fs.createWriteStream(filename);
 //   ws.on('error', function(err) { 
@@ -71,35 +71,31 @@ async function applyJobs(page) {
   // Click Apply, wait for navigation won't help me find the continue button
   await Promise.all([
     page.waitForNavigation({waitUntil: 'networkidle0'}),
-    page.waitForTimeout(3000),
+    //page.waitForTimeout(3000),
     page.click("div[class='jobsearch-IndeedApplyButton-contentWrapper']")
   ]);
   
   let isApplied = await page.$x("//h1[contains(text(), 've applied to this job')]");
   if (isApplied[0]) {
     console.log("Already Applied, return");
-    return true;
+    return "applied";
   }
 
   //let k = 0;
   let button = [];
   while (true) {
     //console.log("Click step: ", k++);
-    //button = await page.$x("//button");
     button = await page.$x("/html/body/div[2]/div/div/div/main/div/div[2]/div/div/div[2]/div/button")
-    //console.log(button, "buttton done");
-    //console.log("button length: ", button.length);
     
     if (!button[0]) {
       break;
     }
     // Determine if Button is disabled (meanning some required questions are not filled)
-    //const href = await page.evaluate(anchor => anchor.getAttribute('href'), title[0]);
     const isDisabled = await page.evaluate(el => el.disabled, button[0]);
     if (isDisabled) {
       console.log("Continue button is disabled");
       //Automatic appy failed, moving to error array
-      return false;
+      return "failed";
     }
     
     try {
@@ -109,17 +105,17 @@ async function applyJobs(page) {
       ]);
     } catch (e) {
       console.error("Automatic appy failed, moving to error array");
-      return false;
+      return "failed";
     }
   }
   // Determine whether successfully applied
   const success = await page.$x("//h1[contains(text(), 'Your application has been submitted!')]");
   if (success[0]) {
     console.log("apply succeed!");
-    return true;
+    return "success";
   } else {
     console.log("apply failed unfortunately..");
-    return false;
+    return "failed";
   }
 }
 
@@ -142,22 +138,27 @@ async function applyJobs(page) {
   console.log("jobs length: ", jobs.length);
 
   // Step 2: Applying these jobs
-  //console.log("Start Applying: ", jobs);
   for (let i = 0; i < jobs.length; i++) {
-    page.on('dialog', async dialog => {
-      console.log('listening dialogs');
-      await dialog.accept();
-    });    
+    // page.on('dialog', async dialog => {
+    //   console.log('listening dialogs');
+    //   await dialog.accept();
+    // });    
+    const applyPage = await browser.newPage();
     console.log("Applying job number ", i, " - ", jobs[i].titleText, "from company - ", jobs[i].companyNameText, "at ", jobs[i].locationText);
-    await page.goto(jobs[i].title_link);
-    if (await applyJobs(page)) {
+    await applyPage.goto(jobs[i].title_link);
+    let result = await applyJobs(applyPage);
+    if (result === "success") {
       console.log("apply succeeded, moving to success bucket");
       jobs_success.push(jobs[i]);
+      await applyPage.close();
     }
-    else {
+    else if (result === "failed") {
       console.log("apply failed, moving to error bucket");
-      //page = await browser.newPage();
+      // leave this page
       jobs_fail.push(jobs[i]);
+    }
+    else { // applied
+      await applyPage.close();
     }
   }
 
@@ -170,9 +171,9 @@ async function applyJobs(page) {
   await csv_fail.toDisk('./fail.csv', { append: true })
 
   console.log("fail bucket: ", jobs_fail, "Please fill them out by yourself");
-  for (let j = 0; j < jobs_fail.length; j++) {
-    const page = await browser.newPage();
-    page.goto(jobs[j].title_link);
-  }
+  // for (let j = 0; j < jobs_fail.length; j++) {
+  //   const page = await browser.newPage();
+  //   page.goto(jobs[j].title_link);
+  // }
   console.log("DONE!");
 })();
